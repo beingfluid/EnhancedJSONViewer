@@ -279,12 +279,35 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentData) return;
         setStatus('Exporting image...');
 
+        const origHeight = tableContainer.style.height;
+        const origOverflow = tableContainer.style.overflow;
+        const origMaxHeight = tableContainer.style.maxHeight;
+        const parentBody = tableContainer.parentElement;
+        const origParentOverflow = parentBody.style.overflow;
+        const origParentHeight = parentBody.style.height;
+
+        tableContainer.style.height = 'auto';
+        tableContainer.style.overflow = 'visible';
+        tableContainer.style.maxHeight = 'none';
+        parentBody.style.overflow = 'visible';
+        parentBody.style.height = 'auto';
+
         html2canvas(tableContainer, {
             backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--bg-app').trim() || '#ffffff',
             scale: 2,
             logging: false,
-            useCORS: true
+            useCORS: true,
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: tableContainer.scrollWidth,
+            windowHeight: tableContainer.scrollHeight
         }).then(canvas => {
+            tableContainer.style.height = origHeight;
+            tableContainer.style.overflow = origOverflow;
+            tableContainer.style.maxHeight = origMaxHeight;
+            parentBody.style.overflow = origParentOverflow;
+            parentBody.style.height = origParentHeight;
+
             const link = document.createElement('a');
             link.download = 'json-table.png';
             link.href = canvas.toDataURL('image/png');
@@ -293,6 +316,11 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.removeChild(link);
             setStatus('Image exported');
         }).catch(() => {
+            tableContainer.style.height = origHeight;
+            tableContainer.style.overflow = origOverflow;
+            tableContainer.style.maxHeight = origMaxHeight;
+            parentBody.style.overflow = origParentOverflow;
+            parentBody.style.height = origParentHeight;
             setStatus('Export failed');
         });
     }
