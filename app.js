@@ -8,9 +8,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const syncJsonBtn = document.getElementById('sync-json-btn');
     const collapseAllBtn = document.getElementById('collapse-all-btn');
     const expandAllBtn = document.getElementById('expand-all-btn');
+    const themeToggle = document.getElementById('theme-toggle');
+    const toggleInput = document.getElementById('toggle-input');
     const errorMessage = document.getElementById('error-message');
-    const outputSection = document.getElementById('output-section');
+    const outputPanel = document.getElementById('output-panel');
+    const inputPanel = document.getElementById('input-panel');
     const tableContainer = document.getElementById('table-container');
+    const statusText = document.getElementById('status-text');
+    const statsText = document.getElementById('stats-text');
+    const dirtyBadge = document.getElementById('dirty-badge');
+    const resizeHandle = document.getElementById('resize-handle');
 
     let currentData = null;
     let isDirty = false;
@@ -24,9 +31,11 @@ document.addEventListener('DOMContentLoaded', () => {
     syncJsonBtn.addEventListener('click', syncToJSON);
     collapseAllBtn.addEventListener('click', collapseAll);
     expandAllBtn.addEventListener('click', expandAll);
+    themeToggle.addEventListener('click', toggleTheme);
+    toggleInput.addEventListener('click', toggleInputPanel);
 
     jsonInput.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && e.key === 'Enter') renderJSON();
+        if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); renderJSON(); }
         if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveJSON(); }
     });
 
@@ -35,6 +44,59 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.ctrlKey && e.key === 'o') { e.preventDefault(); fileInput.click(); }
     });
 
+    initTheme();
+    initResize();
+
+    function initTheme() {
+        const saved = localStorage.getItem('json-viewer-theme');
+        if (saved) {
+            document.documentElement.setAttribute('data-theme', saved);
+        } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+    }
+
+    function toggleTheme() {
+        const current = document.documentElement.getAttribute('data-theme');
+        const next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('json-viewer-theme', next);
+    }
+
+    function toggleInputPanel() {
+        inputPanel.classList.toggle('collapsed');
+    }
+
+    function initResize() {
+        let isResizing = false;
+        let startX, startWidth;
+
+        resizeHandle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            startX = e.clientX;
+            startWidth = inputPanel.offsetWidth;
+            resizeHandle.classList.add('active');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            const diff = e.clientX - startX;
+            const newWidth = Math.max(200, Math.min(startWidth + diff, window.innerWidth - 400));
+            inputPanel.style.width = newWidth + 'px';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                resizeHandle.classList.remove('active');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        });
+    }
+
     function openFile(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -42,6 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const reader = new FileReader();
         reader.onload = (ev) => {
             jsonInput.value = ev.target.result;
+            setStatus(`Opened: ${file.name}`);
             renderJSON();
         };
         reader.readAsText(file);
@@ -63,6 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         markClean();
+        setStatus(`Saved: ${openedFileName}`);
     }
 
     function syncToJSON() {
@@ -70,12 +134,12 @@ document.addEventListener('DOMContentLoaded', () => {
         syncDataFromTable();
         jsonInput.value = JSON.stringify(currentData, null, 2);
         markClean();
+        setStatus('Synced table edits to JSON');
     }
 
     function renderJSON() {
         const input = jsonInput.value.trim();
         errorMessage.classList.add('hidden');
-        outputSection.classList.add('hidden');
 
         if (!input) {
             showError('Please enter some JSON data.');
@@ -99,9 +163,39 @@ document.addEventListener('DOMContentLoaded', () => {
         tableContainer.innerHTML = '';
         const table = buildTable(data, []);
         tableContainer.appendChild(table);
-        outputSection.classList.remove('hidden');
         saveBtn.disabled = false;
+        syncJsonBtn.disabled = false;
         markClean();
+
+        const stats = countNodes(data);
+        statsText.textContent = `${stats.keys} keys • ${stats.values} values • depth ${stats.depth}`;
+        setStatus('Rendered successfully');
+    }
+
+    function countNodes(obj, depth = 1) {
+        let keys = 0, values = 0, maxDepth = depth;
+        if (Array.isArray(obj)) {
+            values += obj.length;
+            for (const item of obj) {
+                if (item && typeof item === 'object') {
+                    const sub = countNodes(item, depth + 1);
+                    keys += sub.keys; values += sub.values;
+                    maxDepth = Math.max(maxDepth, sub.depth);
+                }
+            }
+        } else if (typeof obj === 'object' && obj !== null) {
+            for (const [k, v] of Object.entries(obj)) {
+                keys++;
+                if (v && typeof v === 'object') {
+                    const sub = countNodes(v, depth + 1);
+                    keys += sub.keys; values += sub.values;
+                    maxDepth = Math.max(maxDepth, sub.depth);
+                } else {
+                    values++;
+                }
+            }
+        }
+        return { keys, values, depth: maxDepth };
     }
 
     function buildTable(data, path) {
@@ -209,7 +303,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             cell.className = 'value-cell ' + getTypeClass(parsed);
-            if (cell.classList.contains('edited')) cell.classList.add('edited');
+            if (JSON.stringify(parsed) !== JSON.stringify(originalValue)) {
+                cell.classList.add('edited');
+            }
             cell.textContent = formatPrimitive(parsed);
         });
 
@@ -219,7 +315,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 cell.blur();
             }
             if (e.key === 'Escape') {
-                cell.textContent = formatPrimitive(JSON.parse(cell.getAttribute('data-original-value')));
+                const orig = JSON.parse(cell.getAttribute('data-original-value'));
+                cell.textContent = formatPrimitive(orig);
                 cell.blur();
             }
         });
@@ -280,7 +377,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (arr.length === 0) {
             const span = document.createElement('span');
             span.className = 'value-cell null-val';
-            span.textContent = '[ empty array ]';
+            span.textContent = '[ empty ]';
+            span.style.padding = '0.4rem 0.75rem';
+            span.style.display = 'block';
             return span;
         }
 
@@ -303,7 +402,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 indexCell.innerHTML = `<span class="array-index">${i}</span>`;
 
                 const valueCell = createEditableCell(item, itemPath);
-
                 row.appendChild(indexCell);
                 row.appendChild(valueCell);
                 tbody.appendChild(row);
@@ -398,6 +496,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const p = document.createElement('p');
             p.className = 'value-cell null-val';
             p.textContent = '[ empty array ]';
+            p.style.padding = '1rem';
             return p;
         }
 
@@ -405,7 +504,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return buildFlatArrayTable(arr, path);
         }
 
-        const wrapper = document.createElement('div');
         const table = document.createElement('table');
         table.className = 'json-table';
 
@@ -432,7 +530,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 indexCell.innerHTML = `<span class="array-index">${i}</span>`;
 
                 const valueCell = createEditableCell(item, itemPath);
-
                 row.appendChild(indexCell);
                 row.appendChild(valueCell);
                 tbody.appendChild(row);
@@ -456,8 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         table.appendChild(tbody);
-        wrapper.appendChild(table);
-        return wrapper;
+        return table;
     }
 
     function isHomogeneousObjectArray(arr) {
@@ -488,23 +584,22 @@ document.addEventListener('DOMContentLoaded', () => {
     function showError(message) {
         errorMessage.textContent = message;
         errorMessage.classList.remove('hidden');
+        setStatus('Error');
+    }
+
+    function setStatus(text) {
+        statusText.textContent = text;
     }
 
     function markDirty() {
         isDirty = true;
-        const h2 = document.querySelector('.output-header h2');
-        if (!h2.querySelector('.dirty-indicator')) {
-            const dot = document.createElement('span');
-            dot.className = 'dirty-indicator';
-            dot.title = 'Unsaved changes';
-            h2.appendChild(dot);
-        }
+        dirtyBadge.classList.remove('hidden');
+        setStatus('Modified (unsaved)');
     }
 
     function markClean() {
         isDirty = false;
-        const dot = document.querySelector('.dirty-indicator');
-        if (dot) dot.remove();
+        dirtyBadge.classList.add('hidden');
         const editedCells = tableContainer.querySelectorAll('.edited');
         editedCells.forEach(cell => cell.classList.remove('edited'));
     }
@@ -512,11 +607,26 @@ document.addEventListener('DOMContentLoaded', () => {
     function clearAll() {
         jsonInput.value = '';
         errorMessage.classList.add('hidden');
-        outputSection.classList.add('hidden');
-        tableContainer.innerHTML = '';
+        tableContainer.innerHTML = `
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="empty-icon">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <line x1="3" y1="9" x2="21" y2="9"/>
+                    <line x1="3" y1="15" x2="21" y2="15"/>
+                    <line x1="9" y1="3" x2="9" y2="21"/>
+                    <line x1="15" y1="3" x2="15" y2="21"/>
+                </svg>
+                <p>Paste JSON and click <strong>Render</strong> to view as a table</p>
+                <p class="empty-hint">Or press Ctrl+Enter &bull; Click cells to edit values</p>
+            </div>
+        `;
         currentData = null;
         saveBtn.disabled = true;
+        syncJsonBtn.disabled = true;
         isDirty = false;
+        dirtyBadge.classList.add('hidden');
+        statsText.textContent = '';
+        setStatus('Ready');
     }
 
     function collapseAll() {
@@ -586,6 +696,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ]
         };
         jsonInput.value = JSON.stringify(sample, null, 2);
+        setStatus('Sample data loaded');
         renderJSON();
     }
 });
