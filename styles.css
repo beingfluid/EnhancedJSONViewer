@@ -740,6 +740,103 @@ table.json-table .nested-table-wrapper table tr:last-child th {
     color: #fff;
 }
 
+/* Import Modal */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal {
+    background: var(--bg-popover);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-xl);
+    width: 560px;
+    max-width: 90vw;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    animation: editorIn 0.15s ease-out;
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg-header);
+    border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.modal-header h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.modal-body {
+    padding: 1rem;
+    flex: 1;
+    overflow: auto;
+}
+
+.import-textarea {
+    width: 100%;
+    min-height: 250px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    line-height: 1.5;
+    resize: vertical;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    outline: none;
+}
+
+.import-textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(219, 39, 119, 0.1);
+}
+
+.import-error {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--color-error-bg);
+    border: 1px solid var(--color-error);
+    border-radius: var(--radius-sm);
+    color: var(--color-error);
+    font-size: 0.8rem;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--border-light);
+    background: var(--bg-header);
+    border-radius: 0 0 var(--radius) var(--radius);
+    justify-content: flex-end;
+}
+
+.modal-footer .editor-btn {
+    flex: 0;
+    padding: 0.5rem 1.2rem;
+}
+
 /* Copy Toast */
 .copy-toast {
     position: fixed;

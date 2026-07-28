@@ -4,8 +4,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearBtn = document.getElementById('clear-btn');
     const saveBtn = document.getElementById('save-btn');
     const copyBtn = document.getElementById('copy-btn');
+    const importBtn = document.getElementById('import-btn');
+    const exportImgBtn = document.getElementById('export-img-btn');
     const fileInput = document.getElementById('file-input');
     const toggleCodeBtn = document.getElementById('toggle-code-btn');
+    const importModal = document.getElementById('import-modal');
+    const importTextarea = document.getElementById('import-textarea');
+    const importError = document.getElementById('import-error');
+    const importApply = document.getElementById('import-apply');
+    const importCancel = document.getElementById('import-cancel');
+    const importClose = document.getElementById('import-close');
     const collapseAllBtn = document.getElementById('collapse-all-btn');
     const expandAllBtn = document.getElementById('expand-all-btn');
     const themeToggle = document.getElementById('theme-toggle');
@@ -36,8 +44,13 @@ document.addEventListener('DOMContentLoaded', () => {
     clearBtn.addEventListener('click', clearAll);
     saveBtn.addEventListener('click', saveJSON);
     copyBtn.addEventListener('click', copyJSON);
+    importBtn.addEventListener('click', openImportModal);
+    exportImgBtn.addEventListener('click', exportAsImage);
     fileInput.addEventListener('change', openFile);
     toggleCodeBtn.addEventListener('click', toggleCodePanel);
+    importApply.addEventListener('click', applyImport);
+    importCancel.addEventListener('click', closeImportModal);
+    importClose.addEventListener('click', closeImportModal);
     collapseAllBtn.addEventListener('click', collapseAll);
     expandAllBtn.addEventListener('click', expandAll);
     themeToggle.addEventListener('click', toggleTheme);
@@ -60,10 +73,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeEditor();
+        if (e.key === 'Escape') {
+            if (!importModal.classList.contains('hidden')) closeImportModal();
+            else closeEditor();
+        }
         if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveJSON(); }
         if (e.ctrlKey && e.key === 'o') { e.preventDefault(); fileInput.click(); }
-        if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); tryRender(); }
+        if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
+            if (!importModal.classList.contains('hidden')) applyImport();
+            else tryRender();
+        }
     });
 
     document.addEventListener('mousedown', (e) => {
@@ -103,6 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
         rebuildTable();
         saveBtn.disabled = false;
         copyBtn.disabled = false;
+        exportImgBtn.disabled = false;
         setStatus('Rendered');
     }
 
@@ -203,6 +224,76 @@ document.addEventListener('DOMContentLoaded', () => {
         navigator.clipboard.writeText(json).then(() => {
             showToast();
             setStatus('Copied to clipboard');
+        });
+    }
+
+    function openImportModal() {
+        importModal.classList.remove('hidden');
+        importTextarea.value = '';
+        importError.classList.add('hidden');
+        setTimeout(() => importTextarea.focus(), 50);
+    }
+
+    function closeImportModal() {
+        importModal.classList.add('hidden');
+        importTextarea.value = '';
+        importError.classList.add('hidden');
+    }
+
+    function applyImport() {
+        const input = importTextarea.value.trim();
+        importError.classList.add('hidden');
+
+        if (!input) {
+            importError.textContent = 'Please paste some JSON.';
+            importError.classList.remove('hidden');
+            return;
+        }
+
+        let data;
+        try {
+            data = JSON.parse(input);
+        } catch (e) {
+            importError.textContent = `Invalid JSON: ${e.message}`;
+            importError.classList.remove('hidden');
+            return;
+        }
+
+        if (data === null || typeof data !== 'object') {
+            importError.textContent = 'JSON must be an object or array at the root level.';
+            importError.classList.remove('hidden');
+            return;
+        }
+
+        currentData = data;
+        jsonInput.value = JSON.stringify(data, null, 4);
+        rebuildTable();
+        saveBtn.disabled = false;
+        copyBtn.disabled = false;
+        exportImgBtn.disabled = false;
+        closeImportModal();
+        setStatus('Imported successfully');
+    }
+
+    function exportAsImage() {
+        if (!currentData) return;
+        setStatus('Exporting image...');
+
+        html2canvas(tableContainer, {
+            backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--bg-app').trim() || '#ffffff',
+            scale: 2,
+            logging: false,
+            useCORS: true
+        }).then(canvas => {
+            const link = document.createElement('a');
+            link.download = 'json-table.png';
+            link.href = canvas.toDataURL('image/png');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setStatus('Image exported');
+        }).catch(() => {
+            setStatus('Export failed');
         });
     }
 
@@ -888,6 +979,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentData = null;
         saveBtn.disabled = true;
         copyBtn.disabled = true;
+        exportImgBtn.disabled = true;
         statsText.textContent = '';
         setStatus('Ready');
     }
@@ -986,6 +1078,7 @@ document.addEventListener('DOMContentLoaded', () => {
         rebuildTable();
         saveBtn.disabled = false;
         copyBtn.disabled = false;
+        exportImgBtn.disabled = false;
         setStatus('Sample data loaded');
     }
 });

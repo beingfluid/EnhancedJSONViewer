@@ -33,6 +33,16 @@
                     </label>
                     <input type="file" id="file-input" accept=".json,application/json" hidden>
 
+                    <button class="tool-btn" id="import-btn" title="Paste JSON directly">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
+                            <rect x="8" y="2" width="8" height="4" rx="1"/>
+                            <line x1="12" y1="11" x2="12" y2="17"/>
+                            <polyline points="9,14 12,17 15,14"/>
+                        </svg>
+                        <span>Import</span>
+                    </button>
+
                     <button class="tool-btn" id="save-btn" disabled title="Save JSON file (Ctrl+S)">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
@@ -48,6 +58,15 @@
                             <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
                         </svg>
                         <span>Copy</span>
+                    </button>
+
+                    <button class="tool-btn" id="export-img-btn" disabled title="Export table as image">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <polyline points="21,15 16,10 5,21"/>
+                        </svg>
+                        <span>Image</span>
                     </button>
 
                     <div class="toolbar-divider"></div>
@@ -174,6 +193,24 @@
         </footer>
     </div>
 
+    <!-- Import Modal -->
+    <div id="import-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Import JSON</h3>
+                <button class="editor-close" id="import-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <textarea id="import-textarea" class="import-textarea" placeholder="Paste your JSON here..." spellcheck="false"></textarea>
+                <div id="import-error" class="import-error hidden"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="editor-btn editor-btn-apply" id="import-apply">Import</button>
+                <button class="editor-btn editor-btn-delete" id="import-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Cell Edit Popover -->
     <div id="cell-editor" class="cell-editor hidden">
         <div class="editor-path" id="editor-path" title="Click to copy path"></div>
@@ -204,6 +241,7 @@
     <!-- Copy Toast -->
     <div id="copy-toast" class="copy-toast hidden">Copied to clipboard</div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
