@@ -10,25 +10,34 @@
     <div class="container">
         <header>
             <h1>Enhanced JSON Viewer</h1>
-            <p class="subtitle">Visualize JSON as structured tables with merged cells for nested data</p>
+            <p class="subtitle">Visualize and edit JSON as structured tables</p>
         </header>
 
         <div class="input-section">
             <div class="input-header">
                 <label for="json-input">JSON Input</label>
                 <div class="input-actions">
+                    <label class="btn btn-secondary" for="file-input">
+                        <span class="btn-icon">&#128194;</span> Open
+                    </label>
+                    <input type="file" id="file-input" accept=".json,application/json" hidden>
+                    <button id="save-btn" class="btn btn-secondary" disabled>
+                        <span class="btn-icon">&#128190;</span> Save
+                    </button>
                     <button id="sample-btn" class="btn btn-secondary">Load Sample</button>
                     <button id="clear-btn" class="btn btn-secondary">Clear</button>
                     <button id="render-btn" class="btn btn-primary">Render Table</button>
                 </div>
             </div>
-            <textarea id="json-input" placeholder="Paste your JSON here..." spellcheck="false"></textarea>
+            <textarea id="json-input" placeholder="Paste your JSON here or click Open to load a file..." spellcheck="false"></textarea>
             <div id="error-message" class="error hidden"></div>
         </div>
 
         <div id="output-section" class="output-section hidden">
             <div class="output-header">
                 <h2>Table View</h2>
+                <span class="edit-hint">Click any value to edit</span>
+                <button id="sync-json-btn" class="btn btn-primary btn-sm">Sync to JSON</button>
                 <button id="collapse-all-btn" class="btn btn-secondary btn-sm">Collapse All</button>
                 <button id="expand-all-btn" class="btn btn-secondary btn-sm">Expand All</button>
             </div>

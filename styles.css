@@ -45,9 +45,11 @@ header h1 {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
-.input-header label {
+.input-header label[for="json-input"] {
     font-weight: 600;
     font-size: 0.9rem;
 }
@@ -55,6 +57,7 @@ header h1 {
 .input-actions {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 #json-input {
@@ -84,6 +87,9 @@ header h1 {
     font-weight: 500;
     cursor: pointer;
     transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
 }
 
 .btn-sm {
@@ -107,6 +113,15 @@ header h1 {
 
 .btn-secondary:hover {
     background: #cbd5e1;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-icon {
+    font-size: 1rem;
 }
 
 .error {
@@ -135,12 +150,19 @@ header h1 {
     align-items: center;
     gap: 0.75rem;
     margin-bottom: 1rem;
+    flex-wrap: wrap;
 }
 
 .output-header h2 {
     font-size: 1.1rem;
     font-weight: 600;
     flex: 1;
+}
+
+.edit-hint {
+    font-size: 0.8rem;
+    color: #9ca3af;
+    font-style: italic;
 }
 
 .table-container {
@@ -179,6 +201,20 @@ table.json-table td.key-cell {
 table.json-table td.value-cell {
     color: #1a1a2e;
     word-break: break-word;
+    cursor: text;
+    min-width: 100px;
+}
+
+table.json-table td.value-cell:hover {
+    background: #eff6ff;
+    outline: 2px solid #93c5fd;
+    outline-offset: -2px;
+}
+
+table.json-table td.value-cell:focus {
+    background: #fff;
+    outline: 2px solid #3b82f6;
+    outline-offset: -2px;
 }
 
 table.json-table td.value-cell.string-val {
@@ -197,6 +233,11 @@ table.json-table td.value-cell.boolean-val {
 table.json-table td.value-cell.null-val {
     color: #9ca3af;
     font-style: italic;
+}
+
+table.json-table td.value-cell.edited {
+    background: #fefce8;
+    border-color: #fbbf24;
 }
 
 table.json-table .nested-table-wrapper {
@@ -261,7 +302,7 @@ table.json-table .nested-table-wrapper table tr:last-child th {
 }
 
 .collapsible-toggle::before {
-    content: '▼';
+    content: '\25BC';
     display: inline-block;
     margin-right: 0.4rem;
     font-size: 0.65rem;
@@ -279,4 +320,19 @@ table.json-table .nested-table-wrapper table tr:last-child th {
 .root-array-table th {
     background: #f0fdf4;
     color: #166534;
+}
+
+.dirty-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #f59e0b;
+    border-radius: 50%;
+    margin-left: 0.5rem;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
 }
