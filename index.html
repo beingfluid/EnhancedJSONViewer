@@ -51,14 +51,6 @@
                         <span>Render</span>
                     </button>
 
-                    <button class="tool-btn" id="sync-json-btn" disabled title="Sync edits back to JSON">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="23,4 23,10 17,10"/>
-                            <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
-                        </svg>
-                        <span>Sync</span>
-                    </button>
-
                     <div class="toolbar-divider"></div>
 
                     <button class="tool-btn" id="sample-btn" title="Load sample data">
@@ -111,6 +103,7 @@
                             <polyline points="8,6 2,12 8,18"/>
                         </svg>
                         JSON Input
+                        <span class="auto-sync-badge">auto-sync</span>
                     </span>
                     <button class="panel-toggle" id="toggle-input" title="Toggle input panel">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -137,7 +130,6 @@
                             <line x1="9" y1="21" x2="9" y2="9"/>
                         </svg>
                         Table View
-                        <span class="dirty-badge hidden" id="dirty-badge">modified</span>
                     </span>
                     <div class="panel-actions">
                         <button class="panel-btn" id="collapse-all-btn" title="Collapse all">
@@ -163,7 +155,7 @@
                                 <line x1="15" y1="3" x2="15" y2="21"/>
                             </svg>
                             <p>Paste JSON and click <strong>Render</strong> to view as a table</p>
-                            <p class="empty-hint">Or press Ctrl+Enter &bull; Click cells to edit values</p>
+                            <p class="empty-hint">Click any key or value to edit &bull; Change types via dropdown &bull; Add new fields with +</p>
                         </div>
                     </div>
                 </div>
@@ -177,6 +169,32 @@
                 <span id="stats-text"></span>
             </span>
         </footer>
+    </div>
+
+    <!-- Cell Edit Popover -->
+    <div id="cell-editor" class="cell-editor hidden">
+        <div class="editor-header">
+            <select id="editor-type" class="editor-type-select">
+                <option value="string">String</option>
+                <option value="number">Number</option>
+                <option value="boolean">Boolean</option>
+                <option value="null">Null</option>
+                <option value="object">Object {}</option>
+                <option value="array">Array []</option>
+            </select>
+            <button class="editor-close" id="editor-close" title="Cancel (Esc)">&times;</button>
+        </div>
+        <div class="editor-body">
+            <input type="text" id="editor-input" class="editor-input" autocomplete="off">
+            <select id="editor-bool-select" class="editor-bool-select hidden">
+                <option value="true">true</option>
+                <option value="false">false</option>
+            </select>
+        </div>
+        <div class="editor-footer">
+            <button class="editor-btn editor-btn-apply" id="editor-apply">Apply</button>
+            <button class="editor-btn editor-btn-delete" id="editor-delete" title="Delete this entry">Delete</button>
+        </div>
     </div>
 
     <script src="app.js"></script>

@@ -5,43 +5,65 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearBtn = document.getElementById('clear-btn');
     const saveBtn = document.getElementById('save-btn');
     const fileInput = document.getElementById('file-input');
-    const syncJsonBtn = document.getElementById('sync-json-btn');
     const collapseAllBtn = document.getElementById('collapse-all-btn');
     const expandAllBtn = document.getElementById('expand-all-btn');
     const themeToggle = document.getElementById('theme-toggle');
     const toggleInput = document.getElementById('toggle-input');
     const errorMessage = document.getElementById('error-message');
-    const outputPanel = document.getElementById('output-panel');
     const inputPanel = document.getElementById('input-panel');
     const tableContainer = document.getElementById('table-container');
     const statusText = document.getElementById('status-text');
     const statsText = document.getElementById('stats-text');
-    const dirtyBadge = document.getElementById('dirty-badge');
     const resizeHandle = document.getElementById('resize-handle');
 
+    const cellEditor = document.getElementById('cell-editor');
+    const editorType = document.getElementById('editor-type');
+    const editorInput = document.getElementById('editor-input');
+    const editorBoolSelect = document.getElementById('editor-bool-select');
+    const editorApply = document.getElementById('editor-apply');
+    const editorDelete = document.getElementById('editor-delete');
+    const editorClose = document.getElementById('editor-close');
+
     let currentData = null;
-    let isDirty = false;
     let openedFileName = 'data.json';
+    let editingPath = null;
+    let editingMode = null; // 'key' | 'value'
 
     renderBtn.addEventListener('click', renderJSON);
     sampleBtn.addEventListener('click', loadSample);
     clearBtn.addEventListener('click', clearAll);
     saveBtn.addEventListener('click', saveJSON);
     fileInput.addEventListener('change', openFile);
-    syncJsonBtn.addEventListener('click', syncToJSON);
     collapseAllBtn.addEventListener('click', collapseAll);
     expandAllBtn.addEventListener('click', expandAll);
     themeToggle.addEventListener('click', toggleTheme);
     toggleInput.addEventListener('click', toggleInputPanel);
+    editorApply.addEventListener('click', applyEdit);
+    editorDelete.addEventListener('click', deleteEntry);
+    editorClose.addEventListener('click', closeEditor);
+    editorType.addEventListener('change', onTypeChange);
 
-    jsonInput.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); renderJSON(); }
-        if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveJSON(); }
+    editorInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); applyEdit(); }
+        if (e.key === 'Escape') closeEditor();
+    });
+
+    editorBoolSelect.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); applyEdit(); }
+        if (e.key === 'Escape') closeEditor();
     });
 
     document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeEditor();
         if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveJSON(); }
         if (e.ctrlKey && e.key === 'o') { e.preventDefault(); fileInput.click(); }
+        if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); renderJSON(); }
+    });
+
+    document.addEventListener('mousedown', (e) => {
+        if (!cellEditor.classList.contains('hidden') && !cellEditor.contains(e.target)) {
+            closeEditor();
+        }
     });
 
     initTheme();
@@ -113,9 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveJSON() {
         if (!currentData) return;
-        syncDataFromTable();
         const json = JSON.stringify(currentData, null, 2);
-        jsonInput.value = json;
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -125,16 +145,12 @@ document.addEventListener('DOMContentLoaded', () => {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        markClean();
         setStatus(`Saved: ${openedFileName}`);
     }
 
-    function syncToJSON() {
+    function syncToInput() {
         if (!currentData) return;
-        syncDataFromTable();
         jsonInput.value = JSON.stringify(currentData, null, 2);
-        markClean();
-        setStatus('Synced table edits to JSON');
     }
 
     function renderJSON() {
@@ -160,16 +176,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         currentData = data;
-        tableContainer.innerHTML = '';
-        const table = buildTable(data, []);
-        tableContainer.appendChild(table);
+        rebuildTable();
         saveBtn.disabled = false;
-        syncJsonBtn.disabled = false;
-        markClean();
-
-        const stats = countNodes(data);
-        statsText.textContent = `${stats.keys} keys • ${stats.values} values • depth ${stats.depth}`;
         setStatus('Rendered successfully');
+    }
+
+    function rebuildTable() {
+        tableContainer.innerHTML = '';
+        const table = buildTable(currentData, []);
+        tableContainer.appendChild(table);
+
+        const stats = countNodes(currentData);
+        statsText.textContent = `${stats.keys} keys • ${stats.values} values • depth ${stats.depth}`;
     }
 
     function countNodes(obj, depth = 1) {
@@ -198,10 +216,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return { keys, values, depth: maxDepth };
     }
 
+    // --- Table Building ---
+
     function buildTable(data, path) {
-        if (Array.isArray(data)) {
-            return buildArrayTable(data, path);
-        }
+        if (Array.isArray(data)) return buildArrayTable(data, path);
         return buildObjectTable(data, path);
     }
 
@@ -211,47 +229,93 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
-        const thKey = document.createElement('th');
-        thKey.textContent = 'Key';
-        const thValue = document.createElement('th');
-        thValue.textContent = 'Value';
-        headerRow.appendChild(thKey);
-        headerRow.appendChild(thValue);
+        headerRow.innerHTML = '<th>Key</th><th>Value</th>';
         thead.appendChild(headerRow);
         table.appendChild(thead);
 
         const tbody = document.createElement('tbody');
         for (const [key, value] of Object.entries(obj)) {
-            const rows = renderKeyValue(key, value, [...path, key]);
-            for (const row of rows) {
-                tbody.appendChild(row);
-            }
+            appendKeyValueRows(tbody, key, value, [...path, key], path);
         }
-
         table.appendChild(tbody);
-        return table;
+
+        const addBtn = createAddButton(path, 'object');
+        const wrapper = document.createElement('div');
+        wrapper.appendChild(table);
+        wrapper.appendChild(addBtn);
+        return wrapper;
     }
 
-    function renderKeyValue(key, value, path) {
+    function buildArrayTable(arr, path) {
+        if (arr.length === 0) {
+            const wrapper = document.createElement('div');
+            const p = document.createElement('p');
+            p.className = 'value-cell null-val';
+            p.textContent = '[ empty array ]';
+            p.style.padding = '1rem';
+            wrapper.appendChild(p);
+            wrapper.appendChild(createAddButton(path, 'array'));
+            return wrapper;
+        }
+
+        if (isHomogeneousObjectArray(arr)) {
+            const wrapper = document.createElement('div');
+            wrapper.appendChild(buildFlatArrayTable(arr, path));
+            wrapper.appendChild(createAddButton(path, 'array'));
+            return wrapper;
+        }
+
+        const table = document.createElement('table');
+        table.className = 'json-table';
+
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        headerRow.innerHTML = '<th>Index</th><th>Value</th>';
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        for (let i = 0; i < arr.length; i++) {
+            appendArrayItemRow(tbody, arr[i], [...path, i], path);
+        }
+        table.appendChild(tbody);
+
+        const wrapper = document.createElement('div');
+        wrapper.appendChild(table);
+        wrapper.appendChild(createAddButton(path, 'array'));
+        return wrapper;
+    }
+
+    function appendKeyValueRows(tbody, key, value, path, parentPath) {
         if (value === null || typeof value !== 'object') {
             const row = document.createElement('tr');
             const keyCell = document.createElement('td');
             keyCell.className = 'key-cell';
             keyCell.textContent = key;
+            keyCell.addEventListener('click', (e) => openKeyEditor(e, path, parentPath));
 
-            const valueCell = createEditableCell(value, path);
+            const valueCell = document.createElement('td');
+            valueCell.className = 'value-cell ' + getTypeClass(value);
+            valueCell.textContent = formatPrimitive(value);
+            valueCell.addEventListener('click', (e) => openValueEditor(e, path, value));
 
             row.appendChild(keyCell);
             row.appendChild(valueCell);
-            return [row];
+            tbody.appendChild(row);
+            return;
         }
 
         const row = document.createElement('tr');
         const keyCell = document.createElement('td');
         keyCell.className = 'key-cell collapsible-toggle';
 
-        const keyText = document.createTextNode(key);
-        keyCell.appendChild(keyText);
+        const keySpan = document.createElement('span');
+        keySpan.textContent = key;
+        keySpan.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openKeyEditor(e, path, parentPath);
+        });
+        keyCell.appendChild(keySpan);
 
         const badge = document.createElement('span');
         badge.className = 'type-badge ' + (Array.isArray(value) ? 'array-badge' : 'object-badge');
@@ -273,88 +337,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
         row.appendChild(keyCell);
         row.appendChild(valueCell);
-        return [row];
+        tbody.appendChild(row);
     }
 
-    function createEditableCell(value, path) {
-        const cell = document.createElement('td');
-        cell.className = 'value-cell ' + getTypeClass(value);
-        cell.textContent = formatPrimitive(value);
-        cell.setAttribute('contenteditable', 'true');
-        cell.setAttribute('data-path', JSON.stringify(path));
-        cell.setAttribute('data-original-type', typeof value === 'object' ? 'null' : typeof value);
-        cell.setAttribute('data-original-value', JSON.stringify(value));
+    function appendArrayItemRow(tbody, item, itemPath, parentPath) {
+        const i = itemPath[itemPath.length - 1];
+        if (item === null || typeof item !== 'object') {
+            const row = document.createElement('tr');
+            const indexCell = document.createElement('td');
+            indexCell.className = 'key-cell';
+            indexCell.innerHTML = `<span class="array-index">${i}</span>`;
 
-        cell.addEventListener('focus', () => {
-            if (value === null) cell.textContent = 'null';
-            else if (typeof value === 'string') cell.textContent = value;
-            else cell.textContent = String(value);
-        });
+            const valueCell = document.createElement('td');
+            valueCell.className = 'value-cell ' + getTypeClass(item);
+            valueCell.textContent = formatPrimitive(item);
+            valueCell.addEventListener('click', (e) => openValueEditor(e, itemPath, item));
 
-        cell.addEventListener('blur', () => {
-            const newRaw = cell.textContent.trim();
-            const parsed = parseEditedValue(newRaw, cell.getAttribute('data-original-type'));
-            const originalValue = JSON.parse(cell.getAttribute('data-original-value'));
+            row.appendChild(indexCell);
+            row.appendChild(valueCell);
+            tbody.appendChild(row);
+        } else {
+            const row = document.createElement('tr');
+            const indexCell = document.createElement('td');
+            indexCell.className = 'key-cell';
+            indexCell.innerHTML = `<span class="array-index">${i}</span>`;
 
-            if (JSON.stringify(parsed) !== JSON.stringify(originalValue)) {
-                setNestedValue(currentData, path, parsed);
-                cell.classList.add('edited');
-                markDirty();
-            }
+            const valueCell = document.createElement('td');
+            valueCell.className = 'nested-table-wrapper';
+            const nestedTable = Array.isArray(item)
+                ? buildNestedArrayTable(item, itemPath)
+                : buildNestedObjectTable(item, itemPath);
+            valueCell.appendChild(nestedTable);
 
-            cell.className = 'value-cell ' + getTypeClass(parsed);
-            if (JSON.stringify(parsed) !== JSON.stringify(originalValue)) {
-                cell.classList.add('edited');
-            }
-            cell.textContent = formatPrimitive(parsed);
-        });
-
-        cell.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                cell.blur();
-            }
-            if (e.key === 'Escape') {
-                const orig = JSON.parse(cell.getAttribute('data-original-value'));
-                cell.textContent = formatPrimitive(orig);
-                cell.blur();
-            }
-        });
-
-        return cell;
-    }
-
-    function parseEditedValue(raw, originalType) {
-        if (raw === 'null' || raw === '') return null;
-        if (raw === 'true') return true;
-        if (raw === 'false') return false;
-        if (originalType === 'number' || (!isNaN(raw) && raw !== '')) {
-            const num = Number(raw);
-            if (!isNaN(num)) return num;
+            row.appendChild(indexCell);
+            row.appendChild(valueCell);
+            tbody.appendChild(row);
         }
-        if (raw.startsWith('"') && raw.endsWith('"')) {
-            return raw.slice(1, -1);
-        }
-        return raw;
-    }
-
-    function setNestedValue(obj, path, value) {
-        let current = obj;
-        for (let i = 0; i < path.length - 1; i++) {
-            current = current[path[i]];
-        }
-        current[path[path.length - 1]] = value;
-    }
-
-    function syncDataFromTable() {
-        const editableCells = tableContainer.querySelectorAll('[contenteditable="true"]');
-        editableCells.forEach(cell => {
-            const path = JSON.parse(cell.getAttribute('data-path'));
-            const raw = cell.textContent.trim();
-            const originalType = cell.getAttribute('data-original-type');
-            const parsed = parseEditedValue(raw, originalType);
-            setNestedValue(currentData, path, parsed);
-        });
     }
 
     function buildNestedObjectTable(obj, path) {
@@ -363,28 +381,35 @@ document.addEventListener('DOMContentLoaded', () => {
         const tbody = document.createElement('tbody');
 
         for (const [key, value] of Object.entries(obj)) {
-            const rows = renderKeyValue(key, value, [...path, key]);
-            for (const row of rows) {
-                tbody.appendChild(row);
-            }
+            appendKeyValueRows(tbody, key, value, [...path, key], path);
         }
 
         table.appendChild(tbody);
-        return table;
+
+        const wrapper = document.createElement('div');
+        wrapper.appendChild(table);
+        wrapper.appendChild(createAddButton(path, 'object'));
+        return wrapper;
     }
 
     function buildNestedArrayTable(arr, path) {
         if (arr.length === 0) {
+            const wrapper = document.createElement('div');
             const span = document.createElement('span');
             span.className = 'value-cell null-val';
             span.textContent = '[ empty ]';
             span.style.padding = '0.4rem 0.75rem';
             span.style.display = 'block';
-            return span;
+            wrapper.appendChild(span);
+            wrapper.appendChild(createAddButton(path, 'array'));
+            return wrapper;
         }
 
         if (isHomogeneousObjectArray(arr)) {
-            return buildFlatArrayTable(arr, path);
+            const wrapper = document.createElement('div');
+            wrapper.appendChild(buildFlatArrayTable(arr, path));
+            wrapper.appendChild(createAddButton(path, 'array'));
+            return wrapper;
         }
 
         const table = document.createElement('table');
@@ -392,49 +417,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const tbody = document.createElement('tbody');
 
         for (let i = 0; i < arr.length; i++) {
-            const item = arr[i];
-            const itemPath = [...path, i];
-
-            if (item === null || typeof item !== 'object') {
-                const row = document.createElement('tr');
-                const indexCell = document.createElement('td');
-                indexCell.className = 'key-cell';
-                indexCell.innerHTML = `<span class="array-index">${i}</span>`;
-
-                const valueCell = createEditableCell(item, itemPath);
-                row.appendChild(indexCell);
-                row.appendChild(valueCell);
-                tbody.appendChild(row);
-            } else {
-                const row = document.createElement('tr');
-                const indexCell = document.createElement('td');
-                indexCell.className = 'key-cell';
-                indexCell.innerHTML = `<span class="array-index">${i}</span>`;
-
-                const valueCell = document.createElement('td');
-                valueCell.className = 'nested-table-wrapper';
-                const nestedTable = Array.isArray(item)
-                    ? buildNestedArrayTable(item, itemPath)
-                    : buildNestedObjectTable(item, itemPath);
-                valueCell.appendChild(nestedTable);
-
-                row.appendChild(indexCell);
-                row.appendChild(valueCell);
-                tbody.appendChild(row);
-            }
+            appendArrayItemRow(tbody, arr[i], [...path, i], path);
         }
 
         table.appendChild(tbody);
-        return table;
+
+        const wrapper = document.createElement('div');
+        wrapper.appendChild(table);
+        wrapper.appendChild(createAddButton(path, 'array'));
+        return wrapper;
     }
 
     function buildFlatArrayTable(arr, path) {
         const allKeys = new Set();
         for (const item of arr) {
             if (item && typeof item === 'object' && !Array.isArray(item)) {
-                for (const key of Object.keys(item)) {
-                    allKeys.add(key);
-                }
+                for (const key of Object.keys(item)) allKeys.add(key);
             }
         }
         const keys = Array.from(allKeys);
@@ -471,7 +469,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const cellPath = [...path, i, key];
 
                 if (val === null || typeof val !== 'object') {
-                    const td = createEditableCell(val, cellPath);
+                    const td = document.createElement('td');
+                    td.className = 'value-cell ' + getTypeClass(val);
+                    td.textContent = formatPrimitive(val);
+                    td.addEventListener('click', (e) => openValueEditor(e, cellPath, val));
                     row.appendChild(td);
                 } else {
                     const td = document.createElement('td');
@@ -491,77 +492,291 @@ document.addEventListener('DOMContentLoaded', () => {
         return table;
     }
 
-    function buildArrayTable(arr, path) {
-        if (arr.length === 0) {
-            const p = document.createElement('p');
-            p.className = 'value-cell null-val';
-            p.textContent = '[ empty array ]';
-            p.style.padding = '1rem';
-            return p;
+    function createAddButton(path, containerType) {
+        const btn = document.createElement('button');
+        btn.className = 'add-row-btn';
+        btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add ${containerType === 'object' ? 'property' : 'item'}`;
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            addNewEntry(path, containerType);
+        });
+        return btn;
+    }
+
+    // --- Cell Editor ---
+
+    function openValueEditor(e, path, currentValue) {
+        e.stopPropagation();
+        editingPath = path;
+        editingMode = 'value';
+
+        const type = getValueType(currentValue);
+        editorType.value = type;
+        updateEditorFields(type, currentValue);
+        editorDelete.classList.remove('hidden');
+
+        positionEditor(e.target);
+    }
+
+    function openKeyEditor(e, path, parentPath) {
+        e.stopPropagation();
+        editingPath = path;
+        editingMode = 'key';
+
+        const currentKey = path[path.length - 1];
+        editorType.value = 'string';
+        editorType.disabled = true;
+        editorInput.classList.remove('hidden');
+        editorBoolSelect.classList.add('hidden');
+        editorInput.value = currentKey;
+        editorDelete.classList.remove('hidden');
+
+        positionEditor(e.target);
+        setTimeout(() => {
+            editorInput.focus();
+            editorInput.select();
+        }, 50);
+    }
+
+    function positionEditor(target) {
+        cellEditor.classList.remove('hidden');
+        const rect = target.getBoundingClientRect();
+        let top = rect.bottom + 4;
+        let left = rect.left;
+
+        if (top + 200 > window.innerHeight) {
+            top = rect.top - 200;
+        }
+        if (left + 280 > window.innerWidth) {
+            left = window.innerWidth - 290;
         }
 
-        if (isHomogeneousObjectArray(arr)) {
-            return buildFlatArrayTable(arr, path);
+        cellEditor.style.top = Math.max(4, top) + 'px';
+        cellEditor.style.left = Math.max(4, left) + 'px';
+    }
+
+    function updateEditorFields(type, value) {
+        editorType.disabled = false;
+        editorInput.classList.remove('hidden');
+        editorBoolSelect.classList.add('hidden');
+
+        switch (type) {
+            case 'string':
+                editorInput.value = value === null ? '' : String(value);
+                setTimeout(() => { editorInput.focus(); editorInput.select(); }, 50);
+                break;
+            case 'number':
+                editorInput.value = value === null ? '0' : String(value);
+                setTimeout(() => { editorInput.focus(); editorInput.select(); }, 50);
+                break;
+            case 'boolean':
+                editorInput.classList.add('hidden');
+                editorBoolSelect.classList.remove('hidden');
+                editorBoolSelect.value = String(!!value);
+                break;
+            case 'null':
+                editorInput.value = 'null';
+                editorInput.disabled = true;
+                break;
+            case 'object':
+                editorInput.value = value && typeof value === 'object' && !Array.isArray(value)
+                    ? JSON.stringify(value) : '{}';
+                setTimeout(() => { editorInput.focus(); editorInput.select(); }, 50);
+                break;
+            case 'array':
+                editorInput.value = Array.isArray(value) ? JSON.stringify(value) : '[]';
+                setTimeout(() => { editorInput.focus(); editorInput.select(); }, 50);
+                break;
+        }
+    }
+
+    function onTypeChange() {
+        const type = editorType.value;
+        editorInput.disabled = false;
+
+        if (type === 'boolean') {
+            editorInput.classList.add('hidden');
+            editorBoolSelect.classList.remove('hidden');
+        } else if (type === 'null') {
+            editorInput.classList.remove('hidden');
+            editorBoolSelect.classList.add('hidden');
+            editorInput.value = 'null';
+            editorInput.disabled = true;
+        } else if (type === 'object') {
+            editorInput.classList.remove('hidden');
+            editorBoolSelect.classList.add('hidden');
+            editorInput.value = '{}';
+            editorInput.focus();
+        } else if (type === 'array') {
+            editorInput.classList.remove('hidden');
+            editorBoolSelect.classList.add('hidden');
+            editorInput.value = '[]';
+            editorInput.focus();
+        } else if (type === 'number') {
+            editorInput.classList.remove('hidden');
+            editorBoolSelect.classList.add('hidden');
+            editorInput.value = '0';
+            editorInput.focus();
+        } else {
+            editorInput.classList.remove('hidden');
+            editorBoolSelect.classList.add('hidden');
+            editorInput.value = '';
+            editorInput.focus();
+        }
+    }
+
+    function applyEdit() {
+        if (!editingPath) return;
+
+        if (editingMode === 'key') {
+            applyKeyEdit();
+        } else {
+            applyValueEdit();
         }
 
-        const table = document.createElement('table');
-        table.className = 'json-table';
+        closeEditor();
+        rebuildTable();
+        syncToInput();
+    }
 
-        const thead = document.createElement('thead');
-        const headerRow = document.createElement('tr');
-        const thIndex = document.createElement('th');
-        thIndex.textContent = 'Index';
-        const thValue = document.createElement('th');
-        thValue.textContent = 'Value';
-        headerRow.appendChild(thIndex);
-        headerRow.appendChild(thValue);
-        thead.appendChild(headerRow);
-        table.appendChild(thead);
+    function applyKeyEdit() {
+        const newKey = editorInput.value.trim();
+        if (!newKey) return;
 
-        const tbody = document.createElement('tbody');
-        for (let i = 0; i < arr.length; i++) {
-            const item = arr[i];
-            const itemPath = [...path, i];
+        const oldKey = editingPath[editingPath.length - 1];
+        if (newKey === oldKey) return;
 
-            if (item === null || typeof item !== 'object') {
-                const row = document.createElement('tr');
-                const indexCell = document.createElement('td');
-                indexCell.className = 'key-cell';
-                indexCell.innerHTML = `<span class="array-index">${i}</span>`;
+        const parentPath = editingPath.slice(0, -1);
+        const parent = getNestedValue(currentData, parentPath);
 
-                const valueCell = createEditableCell(item, itemPath);
-                row.appendChild(indexCell);
-                row.appendChild(valueCell);
-                tbody.appendChild(row);
-            } else {
-                const row = document.createElement('tr');
-                const indexCell = document.createElement('td');
-                indexCell.className = 'key-cell';
-                indexCell.innerHTML = `<span class="array-index">${i}</span>`;
+        if (typeof parent === 'object' && !Array.isArray(parent)) {
+            const entries = Object.entries(parent);
+            const idx = entries.findIndex(([k]) => k === oldKey);
+            if (idx !== -1) {
+                entries[idx][0] = newKey;
+                const newObj = {};
+                for (const [k, v] of entries) newObj[k] = v;
 
-                const valueCell = document.createElement('td');
-                valueCell.className = 'nested-table-wrapper';
-                const nestedTable = Array.isArray(item)
-                    ? buildNestedArrayTable(item, itemPath)
-                    : buildNestedObjectTable(item, itemPath);
-                valueCell.appendChild(nestedTable);
-
-                row.appendChild(indexCell);
-                row.appendChild(valueCell);
-                tbody.appendChild(row);
+                if (parentPath.length === 0) {
+                    currentData = newObj;
+                } else {
+                    setNestedValue(currentData, parentPath, newObj);
+                }
             }
         }
+    }
 
-        table.appendChild(tbody);
-        return table;
+    function applyValueEdit() {
+        const type = editorType.value;
+        let newValue;
+
+        switch (type) {
+            case 'string':
+                newValue = editorInput.value;
+                break;
+            case 'number':
+                newValue = Number(editorInput.value);
+                if (isNaN(newValue)) newValue = 0;
+                break;
+            case 'boolean':
+                newValue = editorBoolSelect.value === 'true';
+                break;
+            case 'null':
+                newValue = null;
+                break;
+            case 'object':
+                try { newValue = JSON.parse(editorInput.value); }
+                catch { newValue = {}; }
+                if (typeof newValue !== 'object' || Array.isArray(newValue)) newValue = {};
+                break;
+            case 'array':
+                try { newValue = JSON.parse(editorInput.value); }
+                catch { newValue = []; }
+                if (!Array.isArray(newValue)) newValue = [];
+                break;
+        }
+
+        setNestedValue(currentData, editingPath, newValue);
+    }
+
+    function deleteEntry() {
+        if (!editingPath || editingPath.length === 0) return;
+
+        const parentPath = editingPath.slice(0, -1);
+        const key = editingPath[editingPath.length - 1];
+        const parent = getNestedValue(currentData, parentPath);
+
+        if (Array.isArray(parent)) {
+            parent.splice(key, 1);
+        } else if (typeof parent === 'object' && parent !== null) {
+            delete parent[key];
+        }
+
+        closeEditor();
+        rebuildTable();
+        syncToInput();
+        setStatus(`Deleted "${key}"`);
+    }
+
+    function addNewEntry(path, containerType) {
+        const container = path.length === 0 ? currentData : getNestedValue(currentData, path);
+
+        if (containerType === 'array') {
+            container.push(null);
+        } else {
+            let newKey = 'newKey';
+            let i = 1;
+            while (container.hasOwnProperty(newKey)) {
+                newKey = `newKey${i++}`;
+            }
+            container[newKey] = null;
+        }
+
+        rebuildTable();
+        syncToInput();
+        setStatus('Added new entry');
+    }
+
+    function closeEditor() {
+        cellEditor.classList.add('hidden');
+        editingPath = null;
+        editingMode = null;
+        editorType.disabled = false;
+        editorInput.disabled = false;
+    }
+
+    // --- Utilities ---
+
+    function getNestedValue(obj, path) {
+        let current = obj;
+        for (const key of path) {
+            current = current[key];
+        }
+        return current;
+    }
+
+    function setNestedValue(obj, path, value) {
+        if (path.length === 0) {
+            currentData = value;
+            return;
+        }
+        let current = obj;
+        for (let i = 0; i < path.length - 1; i++) {
+            current = current[path[i]];
+        }
+        current[path[path.length - 1]] = value;
+    }
+
+    function getValueType(value) {
+        if (value === null) return 'null';
+        if (Array.isArray(value)) return 'array';
+        return typeof value;
     }
 
     function isHomogeneousObjectArray(arr) {
         if (arr.length === 0) return false;
         for (const item of arr) {
-            if (item === null || typeof item !== 'object' || Array.isArray(item)) {
-                return false;
-            }
+            if (item === null || typeof item !== 'object' || Array.isArray(item)) return false;
         }
         return true;
     }
@@ -591,19 +806,6 @@ document.addEventListener('DOMContentLoaded', () => {
         statusText.textContent = text;
     }
 
-    function markDirty() {
-        isDirty = true;
-        dirtyBadge.classList.remove('hidden');
-        setStatus('Modified (unsaved)');
-    }
-
-    function markClean() {
-        isDirty = false;
-        dirtyBadge.classList.add('hidden');
-        const editedCells = tableContainer.querySelectorAll('.edited');
-        editedCells.forEach(cell => cell.classList.remove('edited'));
-    }
-
     function clearAll() {
         jsonInput.value = '';
         errorMessage.classList.add('hidden');
@@ -617,14 +819,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <line x1="15" y1="3" x2="15" y2="21"/>
                 </svg>
                 <p>Paste JSON and click <strong>Render</strong> to view as a table</p>
-                <p class="empty-hint">Or press Ctrl+Enter &bull; Click cells to edit values</p>
-            </div>
-        `;
+                <p class="empty-hint">Click any key or value to edit &bull; Change types via dropdown &bull; Add new fields with +</p>
+            </div>`;
         currentData = null;
         saveBtn.disabled = true;
-        syncJsonBtn.disabled = true;
-        isDirty = false;
-        dirtyBadge.classList.add('hidden');
         statsText.textContent = '';
         setStatus('Ready');
     }
