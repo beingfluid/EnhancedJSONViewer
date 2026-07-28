@@ -19,7 +19,7 @@
                         <rect x="3" y="14" width="7" height="7" rx="1"/>
                         <rect x="14" y="14" width="7" height="7" rx="1"/>
                     </svg>
-                    <span class="brand-name">JSON Table Viewer</span>
+                    <span class="brand-name">Enhanced JSON Viewer</span>
                 </div>
             </div>
             <div class="toolbar-center">
@@ -42,13 +42,22 @@
                         <span>Save</span>
                     </button>
 
+                    <button class="tool-btn" id="copy-btn" disabled title="Copy JSON to clipboard">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2"/>
+                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                        </svg>
+                        <span>Copy</span>
+                    </button>
+
                     <div class="toolbar-divider"></div>
 
-                    <button class="tool-btn" id="render-btn" title="Render table (Ctrl+Enter)">
+                    <button class="tool-btn" id="toggle-code-btn" title="Toggle JSON code panel">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polygon points="5,3 19,12 5,21"/>
+                            <polyline points="16,18 22,12 16,6"/>
+                            <polyline points="8,6 2,12 8,18"/>
                         </svg>
-                        <span>Render</span>
+                        <span>Code</span>
                     </button>
 
                     <div class="toolbar-divider"></div>
@@ -94,22 +103,16 @@
 
         <!-- Main Content -->
         <div class="main-content">
-            <!-- Input Panel -->
-            <div class="panel input-panel" id="input-panel">
+            <!-- Code Panel (hidden by default) -->
+            <div class="panel code-panel hidden" id="code-panel">
                 <div class="panel-header">
                     <span class="panel-title">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="panel-icon">
                             <polyline points="16,18 22,12 16,6"/>
                             <polyline points="8,6 2,12 8,18"/>
                         </svg>
-                        JSON Input
-                        <span class="auto-sync-badge">auto-sync</span>
+                        JSON Code
                     </span>
-                    <button class="panel-toggle" id="toggle-input" title="Toggle input panel">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="15,18 9,12 15,6"/>
-                        </svg>
-                    </button>
                 </div>
                 <div class="panel-body">
                     <textarea id="json-input" placeholder="Paste JSON here, or use Open to load a file..." spellcheck="false"></textarea>
@@ -118,10 +121,10 @@
             </div>
 
             <!-- Resize Handle -->
-            <div class="resize-handle" id="resize-handle"></div>
+            <div class="resize-handle hidden" id="resize-handle"></div>
 
-            <!-- Output Panel -->
-            <div class="panel output-panel" id="output-panel">
+            <!-- Table Panel -->
+            <div class="panel table-panel" id="table-panel">
                 <div class="panel-header">
                     <span class="panel-title">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="panel-icon">
@@ -154,8 +157,8 @@
                                 <line x1="9" y1="3" x2="9" y2="21"/>
                                 <line x1="15" y1="3" x2="15" y2="21"/>
                             </svg>
-                            <p>Paste JSON and click <strong>Render</strong> to view as a table</p>
-                            <p class="empty-hint">Click any key or value to edit &bull; Change types via dropdown &bull; Add new fields with +</p>
+                            <p>Paste JSON and press <strong>Ctrl+Enter</strong> or toggle the Code panel</p>
+                            <p class="empty-hint">Click any key or value to edit &bull; Change types via dropdown &bull; Add fields with +</p>
                         </div>
                     </div>
                 </div>
@@ -196,6 +199,9 @@
             <button class="editor-btn editor-btn-delete" id="editor-delete" title="Delete this entry">Delete</button>
         </div>
     </div>
+
+    <!-- Copy Toast -->
+    <div id="copy-toast" class="copy-toast hidden">Copied to clipboard</div>
 
     <script src="app.js"></script>
 </body>

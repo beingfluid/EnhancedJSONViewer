@@ -1,20 +1,21 @@
 document.addEventListener('DOMContentLoaded', () => {
     const jsonInput = document.getElementById('json-input');
-    const renderBtn = document.getElementById('render-btn');
     const sampleBtn = document.getElementById('sample-btn');
     const clearBtn = document.getElementById('clear-btn');
     const saveBtn = document.getElementById('save-btn');
+    const copyBtn = document.getElementById('copy-btn');
     const fileInput = document.getElementById('file-input');
+    const toggleCodeBtn = document.getElementById('toggle-code-btn');
     const collapseAllBtn = document.getElementById('collapse-all-btn');
     const expandAllBtn = document.getElementById('expand-all-btn');
     const themeToggle = document.getElementById('theme-toggle');
-    const toggleInput = document.getElementById('toggle-input');
     const errorMessage = document.getElementById('error-message');
-    const inputPanel = document.getElementById('input-panel');
+    const codePanel = document.getElementById('code-panel');
+    const resizeHandle = document.getElementById('resize-handle');
     const tableContainer = document.getElementById('table-container');
     const statusText = document.getElementById('status-text');
     const statsText = document.getElementById('stats-text');
-    const resizeHandle = document.getElementById('resize-handle');
+    const copyToast = document.getElementById('copy-toast');
 
     const cellEditor = document.getElementById('cell-editor');
     const editorType = document.getElementById('editor-type');
@@ -27,21 +28,25 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentData = null;
     let openedFileName = 'data.json';
     let editingPath = null;
-    let editingMode = null; // 'key' | 'value'
+    let editingMode = null;
+    let renderTimeout = null;
 
-    renderBtn.addEventListener('click', renderJSON);
     sampleBtn.addEventListener('click', loadSample);
     clearBtn.addEventListener('click', clearAll);
     saveBtn.addEventListener('click', saveJSON);
+    copyBtn.addEventListener('click', copyJSON);
     fileInput.addEventListener('change', openFile);
+    toggleCodeBtn.addEventListener('click', toggleCodePanel);
     collapseAllBtn.addEventListener('click', collapseAll);
     expandAllBtn.addEventListener('click', expandAll);
     themeToggle.addEventListener('click', toggleTheme);
-    toggleInput.addEventListener('click', toggleInputPanel);
     editorApply.addEventListener('click', applyEdit);
     editorDelete.addEventListener('click', deleteEntry);
     editorClose.addEventListener('click', closeEditor);
     editorType.addEventListener('change', onTypeChange);
+
+    jsonInput.addEventListener('input', debounceRender);
+    jsonInput.addEventListener('paste', () => setTimeout(debounceRender, 0));
 
     editorInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); applyEdit(); }
@@ -57,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Escape') closeEditor();
         if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveJSON(); }
         if (e.ctrlKey && e.key === 'o') { e.preventDefault(); fileInput.click(); }
-        if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); renderJSON(); }
+        if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); tryRender(); }
     });
 
     document.addEventListener('mousedown', (e) => {
@@ -68,6 +73,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initTheme();
     initResize();
+
+    function debounceRender() {
+        clearTimeout(renderTimeout);
+        renderTimeout = setTimeout(tryRender, 400);
+    }
+
+    function tryRender() {
+        const input = jsonInput.value.trim();
+        errorMessage.classList.add('hidden');
+
+        if (!input) return;
+
+        let data;
+        try {
+            data = JSON.parse(input);
+        } catch (e) {
+            showError(`Invalid JSON: ${e.message}`);
+            return;
+        }
+
+        if (data === null || typeof data !== 'object') {
+            showError('JSON must be an object or array at the root level.');
+            return;
+        }
+
+        currentData = data;
+        rebuildTable();
+        saveBtn.disabled = false;
+        copyBtn.disabled = false;
+        setStatus('Rendered');
+    }
 
     function initTheme() {
         const saved = localStorage.getItem('json-viewer-theme');
@@ -85,8 +121,10 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('json-viewer-theme', next);
     }
 
-    function toggleInputPanel() {
-        inputPanel.classList.toggle('collapsed');
+    function toggleCodePanel() {
+        codePanel.classList.toggle('hidden');
+        resizeHandle.classList.toggle('hidden');
+        toggleCodeBtn.classList.toggle('active');
     }
 
     function initResize() {
@@ -96,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
         resizeHandle.addEventListener('mousedown', (e) => {
             isResizing = true;
             startX = e.clientX;
-            startWidth = inputPanel.offsetWidth;
+            startWidth = codePanel.offsetWidth;
             resizeHandle.classList.add('active');
             document.body.style.cursor = 'col-resize';
             document.body.style.userSelect = 'none';
@@ -106,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!isResizing) return;
             const diff = e.clientX - startX;
             const newWidth = Math.max(200, Math.min(startWidth + diff, window.innerWidth - 400));
-            inputPanel.style.width = newWidth + 'px';
+            codePanel.style.width = newWidth + 'px';
         });
 
         document.addEventListener('mouseup', () => {
@@ -125,9 +163,19 @@ document.addEventListener('DOMContentLoaded', () => {
         openedFileName = file.name;
         const reader = new FileReader();
         reader.onload = (ev) => {
-            jsonInput.value = ev.target.result;
-            setStatus(`Opened: ${file.name}`);
-            renderJSON();
+            const raw = ev.target.result;
+            try {
+                const parsed = JSON.parse(raw);
+                jsonInput.value = JSON.stringify(parsed, null, 4);
+                currentData = parsed;
+                rebuildTable();
+                saveBtn.disabled = false;
+                copyBtn.disabled = false;
+                setStatus(`Opened: ${file.name}`);
+            } catch (err) {
+                jsonInput.value = raw;
+                showError(`Invalid JSON in file: ${err.message}`);
+            }
         };
         reader.readAsText(file);
         fileInput.value = '';
@@ -135,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveJSON() {
         if (!currentData) return;
-        const json = JSON.stringify(currentData, null, 2);
+        const json = JSON.stringify(currentData, null, 4);
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -148,37 +196,23 @@ document.addEventListener('DOMContentLoaded', () => {
         setStatus(`Saved: ${openedFileName}`);
     }
 
-    function syncToInput() {
+    function copyJSON() {
         if (!currentData) return;
-        jsonInput.value = JSON.stringify(currentData, null, 2);
+        const json = JSON.stringify(currentData, null, 4);
+        navigator.clipboard.writeText(json).then(() => {
+            showToast();
+            setStatus('Copied to clipboard');
+        });
     }
 
-    function renderJSON() {
-        const input = jsonInput.value.trim();
-        errorMessage.classList.add('hidden');
+    function showToast() {
+        copyToast.classList.remove('hidden');
+        setTimeout(() => copyToast.classList.add('hidden'), 2000);
+    }
 
-        if (!input) {
-            showError('Please enter some JSON data.');
-            return;
-        }
-
-        let data;
-        try {
-            data = JSON.parse(input);
-        } catch (e) {
-            showError(`Invalid JSON: ${e.message}`);
-            return;
-        }
-
-        if (data === null || typeof data !== 'object') {
-            showError('JSON must be an object or array at the root level.');
-            return;
-        }
-
-        currentData = data;
-        rebuildTable();
-        saveBtn.disabled = false;
-        setStatus('Rendered successfully');
+    function syncToInput() {
+        if (!currentData) return;
+        jsonInput.value = JSON.stringify(currentData, null, 4);
     }
 
     function rebuildTable() {
@@ -239,10 +273,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         table.appendChild(tbody);
 
-        const addBtn = createAddButton(path, 'object');
         const wrapper = document.createElement('div');
         wrapper.appendChild(table);
-        wrapper.appendChild(addBtn);
+        wrapper.appendChild(createAddButton(path, 'object'));
         return wrapper;
     }
 
@@ -512,6 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const type = getValueType(currentValue);
         editorType.value = type;
+        editorType.disabled = false;
         updateEditorFields(type, currentValue);
         editorDelete.classList.remove('hidden');
 
@@ -528,6 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
         editorType.disabled = true;
         editorInput.classList.remove('hidden');
         editorBoolSelect.classList.add('hidden');
+        editorInput.disabled = false;
         editorInput.value = currentKey;
         editorDelete.classList.remove('hidden');
 
@@ -556,7 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateEditorFields(type, value) {
-        editorType.disabled = false;
+        editorInput.disabled = false;
         editorInput.classList.remove('hidden');
         editorBoolSelect.classList.add('hidden');
 
@@ -593,35 +628,34 @@ document.addEventListener('DOMContentLoaded', () => {
     function onTypeChange() {
         const type = editorType.value;
         editorInput.disabled = false;
+        editorInput.classList.remove('hidden');
+        editorBoolSelect.classList.add('hidden');
 
-        if (type === 'boolean') {
-            editorInput.classList.add('hidden');
-            editorBoolSelect.classList.remove('hidden');
-        } else if (type === 'null') {
-            editorInput.classList.remove('hidden');
-            editorBoolSelect.classList.add('hidden');
-            editorInput.value = 'null';
-            editorInput.disabled = true;
-        } else if (type === 'object') {
-            editorInput.classList.remove('hidden');
-            editorBoolSelect.classList.add('hidden');
-            editorInput.value = '{}';
-            editorInput.focus();
-        } else if (type === 'array') {
-            editorInput.classList.remove('hidden');
-            editorBoolSelect.classList.add('hidden');
-            editorInput.value = '[]';
-            editorInput.focus();
-        } else if (type === 'number') {
-            editorInput.classList.remove('hidden');
-            editorBoolSelect.classList.add('hidden');
-            editorInput.value = '0';
-            editorInput.focus();
-        } else {
-            editorInput.classList.remove('hidden');
-            editorBoolSelect.classList.add('hidden');
-            editorInput.value = '';
-            editorInput.focus();
+        switch (type) {
+            case 'boolean':
+                editorInput.classList.add('hidden');
+                editorBoolSelect.classList.remove('hidden');
+                break;
+            case 'null':
+                editorInput.value = 'null';
+                editorInput.disabled = true;
+                break;
+            case 'object':
+                editorInput.value = '{}';
+                editorInput.focus();
+                break;
+            case 'array':
+                editorInput.value = '[]';
+                editorInput.focus();
+                break;
+            case 'number':
+                editorInput.value = '0';
+                editorInput.focus();
+                break;
+            default:
+                editorInput.value = '';
+                editorInput.focus();
+                break;
         }
     }
 
@@ -818,11 +852,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     <line x1="9" y1="3" x2="9" y2="21"/>
                     <line x1="15" y1="3" x2="15" y2="21"/>
                 </svg>
-                <p>Paste JSON and click <strong>Render</strong> to view as a table</p>
-                <p class="empty-hint">Click any key or value to edit &bull; Change types via dropdown &bull; Add new fields with +</p>
+                <p>Paste JSON and press <strong>Ctrl+Enter</strong> or toggle the Code panel</p>
+                <p class="empty-hint">Click any key or value to edit &bull; Change types via dropdown &bull; Add fields with +</p>
             </div>`;
         currentData = null;
         saveBtn.disabled = true;
+        copyBtn.disabled = true;
         statsText.textContent = '';
         setStatus('Ready');
     }
@@ -851,50 +886,76 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadSample() {
         const sample = {
-            "name": "John Doe",
-            "age": 32,
-            "active": true,
-            "email": null,
-            "address": {
-                "street": "123 Main St",
-                "city": "Springfield",
-                "state": "IL",
-                "zip": "62701",
-                "coordinates": {
-                    "lat": 39.7817,
-                    "lng": -89.6501
-                }
-            },
-            "phones": [
-                { "type": "home", "number": "555-1234" },
-                { "type": "work", "number": "555-5678" }
-            ],
-            "skills": ["JavaScript", "Python", "SQL"],
-            "projects": [
+            "@type": "GeographicSite",
+            "id": "00000000-0000-0000-0000-000000000003",
+            "name": "Example Site Datacenter",
+            "description": "German virtual site created with GAM address reference",
+            "status": "planned",
+            "siteCategory": "VirtualSite",
+            "creationDate": "2026-07-23T10:10:00Z",
+            "externalIdentifier": [
                 {
-                    "name": "Widget App",
-                    "status": "completed",
-                    "team": ["Alice", "Bob"],
-                    "metadata": {
-                        "startDate": "2024-01-15",
-                        "endDate": "2024-06-30",
-                        "budget": 50000
+                    "@type": "ExternalIdentifier",
+                    "owner": "CRM-T",
+                    "externalIdentifierType": "StandortID",
+                    "id": "1-XXXXXX"
+                }
+            ],
+            "relatedParty": [
+                {
+                    "@type": "RelatedPartyRefOrPartyRoleRef",
+                    "role": "Customer",
+                    "partyOrPartyRole": {
+                        "id": "org-00000-example-001",
+                        "name": "ACME Corp",
+                        "@type": "PartyRef",
+                        "@referredType": "Organization"
                     }
                 },
                 {
-                    "name": "Data Pipeline",
-                    "status": "in-progress",
-                    "team": ["Charlie", "Diana", "Eve"],
-                    "metadata": {
-                        "startDate": "2024-03-01",
-                        "endDate": null,
-                        "budget": 120000
+                    "@type": "RelatedPartyRefOrPartyRoleRef",
+                    "role": "ContactFacilityManagement",
+                    "partyOrPartyRole": {
+                        "id": "ind-00000-example-003",
+                        "name": "Alex Example",
+                        "@type": "PartyRef",
+                        "@referredType": "Individual"
                     }
+                }
+            ],
+            "relatedAddress": [
+                {
+                    "@type": "RelatedGeographicAddressRef",
+                    "role": "Registered Address",
+                    "address": {
+                        "@type": "GeographicAddressValue",
+                        "city": "Beispielstadt",
+                        "country": "DE",
+                        "postcode": "11111",
+                        "streetName": "Testweg",
+                        "streetNr": "99"
+                    }
+                }
+            ],
+            "siteFeature": [
+                {
+                    "@type": "AddressFeature",
+                    "name": "Address Details GAM Reference",
+                    "featureCharacteristic": [
+                        {
+                            "@type": "KlsIdCharacteristic",
+                            "name": "klsId",
+                            "value": "8888888"
+                        }
+                    ]
                 }
             ]
         };
-        jsonInput.value = JSON.stringify(sample, null, 2);
+        jsonInput.value = JSON.stringify(sample, null, 4);
+        currentData = sample;
+        rebuildTable();
+        saveBtn.disabled = false;
+        copyBtn.disabled = false;
         setStatus('Sample data loaded');
-        renderJSON();
     }
 });
