@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced JSON Viewer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Enhanced JSON Viewer</h1>
+            <p class="subtitle">Visualize JSON as structured tables with merged cells for nested data</p>
+        </header>
+
+        <div class="input-section">
+            <div class="input-header">
+                <label for="json-input">JSON Input</label>
+                <div class="input-actions">
+                    <button id="sample-btn" class="btn btn-secondary">Load Sample</button>
+                    <button id="clear-btn" class="btn btn-secondary">Clear</button>
+                    <button id="render-btn" class="btn btn-primary">Render Table</button>
+                </div>
+            </div>
+            <textarea id="json-input" placeholder="Paste your JSON here..." spellcheck="false"></textarea>
+            <div id="error-message" class="error hidden"></div>
+        </div>
+
+        <div id="output-section" class="output-section hidden">
+            <div class="output-header">
+                <h2>Table View</h2>
+                <button id="collapse-all-btn" class="btn btn-secondary btn-sm">Collapse All</button>
+                <button id="expand-all-btn" class="btn btn-secondary btn-sm">Expand All</button>
+            </div>
+            <div id="table-container" class="table-container"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
