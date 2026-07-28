@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const copyToast = document.getElementById('copy-toast');
 
     const cellEditor = document.getElementById('cell-editor');
+    const editorPath = document.getElementById('editor-path');
     const editorType = document.getElementById('editor-type');
     const editorInput = document.getElementById('editor-input');
     const editorBoolSelect = document.getElementById('editor-bool-select');
@@ -538,11 +539,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Cell Editor ---
 
+    function formatJsonPath(path) {
+        let result = '$';
+        for (const segment of path) {
+            if (typeof segment === 'number') {
+                result += `[${segment}]`;
+            } else if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(segment)) {
+                result += `.${segment}`;
+            } else {
+                result += `["${segment}"]`;
+            }
+        }
+        return result;
+    }
+
+    function showPathInEditor(path) {
+        const pathStr = formatJsonPath(path);
+        editorPath.textContent = pathStr;
+        editorPath.title = `Click to copy: ${pathStr}`;
+        editorPath.onclick = () => {
+            navigator.clipboard.writeText(pathStr).then(() => {
+                const orig = editorPath.textContent;
+                editorPath.textContent = 'Copied!';
+                setTimeout(() => { editorPath.textContent = orig; }, 1000);
+            });
+        };
+    }
+
     function openValueEditor(e, path, currentValue) {
         e.stopPropagation();
         editingPath = path;
         editingMode = 'value';
 
+        showPathInEditor(path);
         const type = getValueType(currentValue);
         editorType.value = type;
         editorType.disabled = false;
@@ -557,6 +586,7 @@ document.addEventListener('DOMContentLoaded', () => {
         editingPath = path;
         editingMode = 'key';
 
+        showPathInEditor(path);
         const currentKey = path[path.length - 1];
         editorType.value = 'string';
         editorType.disabled = true;

@@ -595,6 +595,30 @@ table.json-table .nested-table-wrapper table tr:last-child th {
     to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+.editor-path {
+    padding: 0.4rem 0.75rem;
+    background: var(--bg-cell-key);
+    border-bottom: 1px solid var(--border-light);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-key);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.editor-path:hover {
+    background: var(--bg-hover);
+}
+
+.editor-path::before {
+    content: 'Path: ';
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
 .editor-header {
     display: flex;
     align-items: center;
